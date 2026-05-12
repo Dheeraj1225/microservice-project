@@ -30,7 +30,7 @@ jobs:
 
     - name: Build and Push Docker Image
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/order-service:latest .
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/order-service:latest ./order-service
         docker push ${{ secrets.DOCKER_USERNAME }}/order-service:latest
 
     - name: Deploy to EC2
