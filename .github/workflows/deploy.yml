@@ -70,6 +70,6 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-order-task.outputs.task-definition }}
-          service: ord_ser  # Service name in AWS ECS console
+          service: fargate-ord-service # Service name in AWS ECS console
           cluster: microservice-cluster
           wait-for-service-stability: true
