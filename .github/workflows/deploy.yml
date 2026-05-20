@@ -9,43 +9,67 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      # 1. Pull down your repository code
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        java-version: '21'
-        distribution: 'temurin'
-        cache: maven
+      # 2. Set up Java environment matching your project requirement
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
 
-    - name: Build with Maven
-      run: mvn clean package -DskipTests
+      # 3. Compile and Package the Spring Boot JAR file
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      # 4. Authenticate with Docker Hub using your GitHub Secrets
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build and Push Docker Image
-      run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/order-service:latest ./order-service
-        docker push ${{ secrets.DOCKER_USERNAME }}/order-service:latest
+      # 5. Build the Docker container and push it to your registry
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/order-service:latest ./order-service
+          docker push ${{ secrets.DOCKER_USERNAME }}/order-service:latest
 
-    - name: Deploy to EC2
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.ORDER_EC2_IP }}
-        username: ec2-user
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          docker pull ${{ secrets.DOCKER_USERNAME }}/order-service:latest
-          docker stop order-service || true
-          docker rm order-service || true
-          docker run -d --name order-service -p 8082:8082 \
-            -e SPRING_DATASOURCE_URL=jdbc:postgresql://microservice-db-instance.cgti6g24mcph.us-east-1.rds.amazonaws.com:5432/postgres \
-            -e SPRING_DATASOURCE_USERNAME=postgres \
-            -e SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASSWORD }} \
-            -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
-            ${{ secrets.DOCKER_USERNAME }}/order-service:latest
+      # 6. Authenticate with AWS safely using your Root Access Keys
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # 7. Pull your current ECS Task Definition blueprint down to local runner memory
+      - name: Download Task Definition
+        run: |
+          aws ecs describe-task-definition --task-definition order-service-task --query taskDefinition > task-definition.json
+
+      # 8. Inject your new Docker image and RDS variables into the template blueprint
+      - name: Fill in the new image and env vars in the Amazon ECS task definition
+        id: render-order-task
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: order-service-container  # <-- Verify this matches your exact Container Name in the AWS ECS console!
+          image: ${{ secrets.DOCKER_USERNAME }}/order-service:latest
+          environment-variables: |
+            SPRING_DATASOURCE_URL=jdbc:postgresql://microservice-db-instance.cgti6g24mcph.us-east-1.rds.amazonaws.com:5432/postgres
+            SPRING_DATASOURCE_USERNAME=postgres
+            SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASSWORD }}
+            SPRING_JPA_HIBERNATE_DDL_AUTO=update
+
+      # 9. Deploy the updated blueprint. ECS handles the rolling swap safely on your EC2 fleet.
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-order-task.outputs.task-definition }}
+          service: order-task-service
+          cluster: microservice-cluster
+          wait-for-service-stability: true
