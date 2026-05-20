@@ -35,7 +35,7 @@ jobs:
       # 5. Build the Docker container and push it to your registry
       - name: Build and Push Docker Image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/order-service:latest ./order-service
+          docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/order-service:latest ./order-service
           docker push ${{ secrets.DOCKER_USERNAME }}/order-service:latest
 
       # 6. Authenticate with AWS safely using your Root Access Keys
