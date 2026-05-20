@@ -1,19 +1,21 @@
-name: Microservices Deployment
+name: Build and Deploy to Amazon ECS Fargate
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
-  build-and-deploy:
+  deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Pull down your repository code
+      # 1. Pull a fresh copy of your code down to the GitHub runner
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Set up Java environment matching your project requirement
+      # 2. Set up the Java environment matching your project language spec
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -21,55 +23,52 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # 3. Compile and Package the Spring Boot JAR file
+      # 3. Clean and build your executable Spring Boot JAR artifact
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      # 4. Authenticate with Docker Hub using your GitHub Secrets
+      # 4. Log safely into your personal Docker Hub storage warehouse
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 5. Build the Docker container and push it to your registry
+      # 5. Compile the container image targeting standard cloud processor architecture
       - name: Build and Push Docker Image
         run: |
           docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/order-service:latest ./order-service
           docker push ${{ secrets.DOCKER_USERNAME }}/order-service:latest
 
-      # 6. Authenticate with AWS safely using your Root Access Keys
+      # 6. Authenticate with AWS using your secret access keys
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: us-east-1 # Stays hardcoded here directly
 
-      # 7. Pull your current ECS Task Definition blueprint down to local runner memory
+      # 7. Download your fresh Fargate infrastructure configuration blueprint from AWS
       - name: Download Task Definition
         run: |
-          aws ecs describe-task-definition --task-definition order-service-task --query taskDefinition > task-definition.json
+          aws ecs describe-task-definition --task-definition task-definition-order --query taskDefinition > task-definition.json
 
-      # 8. Inject your new Docker image and RDS variables into the template blueprint
+      # 8. Render new environmental mappings and dynamic database secret attributes
       - name: Fill in the new image and env vars in the Amazon ECS task definition
         id: render-order-task
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
-          container-name: order-service-container  # Container name AWS ECS console
+          container-name: order-service-container # Must match the container name inside your task definition revision
           image: ${{ secrets.DOCKER_USERNAME }}/order-service:latest
           environment-variables: |
-            SPRING_DATASOURCE_URL=jdbc:postgresql://microservice-db-instance.cgti6g24mcph.us-east-1.rds.amazonaws.com:5432/postgres
-            SPRING_DATASOURCE_USERNAME=postgres
             SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASSWORD }}
-            SPRING_JPA_HIBERNATE_DDL_AUTO=update
 
-      # 9. Deploy the updated blueprint. ECS handles the rolling swap safely on your EC2 fleet.
+      # 9. Safely orchestrate the serverless deployment onto AWS Fargate
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-order-task.outputs.task-definition }}
-          service: fargate-ord-service # Service name in AWS ECS console
+          service: fargate-ord-service # Handed directly to the step
           cluster: microservice-cluster
           wait-for-service-stability: true
