@@ -57,7 +57,7 @@ jobs:
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
-          container-name: order-service-container  # <-- Verify this matches your exact Container Name in the AWS ECS console!
+          container-name: order-service-container  # Container name AWS ECS console
           image: ${{ secrets.DOCKER_USERNAME }}/order-service:latest
           environment-variables: |
             SPRING_DATASOURCE_URL=jdbc:postgresql://microservice-db-instance.cgti6g24mcph.us-east-1.rds.amazonaws.com:5432/postgres
@@ -70,6 +70,6 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-order-task.outputs.task-definition }}
-          service: order-task-service
+          service: ord_ser  # Service name in AWS ECS console
           cluster: microservice-cluster
           wait-for-service-stability: true
