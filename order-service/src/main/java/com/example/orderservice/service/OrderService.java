@@ -33,10 +33,8 @@ public class OrderService {
 
         order.setOrderLineItemsList(orderLineItems);
 
-        // TODO: Update this URL once your inventory service is deployed to Fargate!
-        // To bypass this check temporarily for cloud testing, you can hardcode: Boolean isInStock = true;
         Boolean isInStock = webClientBuilder.build().get()
-                .uri("http://inventory-service:8083/api/inventory/" + orderLineItems.get(0).getSkuCode())
+                .uri("http://inventory-service.local:8083/api/inventory/" + orderLineItems.get(0).getSkuCode())
                 .retrieve()
                 .bodyToMono(Boolean.class)
                 .block();
