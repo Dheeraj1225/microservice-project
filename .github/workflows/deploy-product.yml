@@ -78,6 +78,6 @@ jobs:
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.render-product-task.outputs.task-definition }}
-          service: fargate-product-service           # Make sure this matches your active ECS service name
+          service: fargate-prod-service           # Make sure this matches your active ECS service name
           cluster: microservice-cluster
           wait-for-service-stability: true
